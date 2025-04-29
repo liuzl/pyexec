@@ -1,0 +1,26 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+
+	// Import the local pyexec package using the correct module path
+	"github.com/liuzl/pyexec"
+)
+
+func main() {
+	// Register the handler from pyexec package
+	// It will handle requests like /execute/hello.py
+	http.HandleFunc("/execute/", pyexec.HandlePythonExecutionRequest) // Note the trailing slash
+
+	port := "8080"
+	fmt.Printf("Starting server on port %s...\n", port)
+	fmt.Printf("Test URL: http://localhost:%s/execute/hello.py?--name=Tester&--verbose\n", port)
+
+	// Start the server
+	err := http.ListenAndServe(":"+port, nil)
+	if err != nil {
+		log.Fatalf("Error starting server: %v\n", err)
+	}
+}
