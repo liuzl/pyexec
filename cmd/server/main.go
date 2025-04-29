@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 
-	// Import the local pyexec package using the correct module path
 	"github.com/liuzl/pyexec"
 )
 
@@ -19,8 +18,7 @@ func main() {
 	fmt.Printf("Test URL: http://localhost:%s/execute/hello.py?--name=Tester&--verbose\n", port)
 
 	// Start the server
-	err := http.ListenAndServe(":"+port, nil)
-	if err != nil {
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatalf("Error starting server: %v\n", err)
 	}
 }
