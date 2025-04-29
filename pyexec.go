@@ -20,16 +20,36 @@ func fileExists(filename string) bool {
 }
 
 // findScript attempts to locate the specified Python script by its name.
-// It searches in environment variables, relative paths, near the executable,
-// and near the caller's source file.
+// It searches in environment variables, a configurable list of directories,
+// relative paths, near the executable, and near the caller's source file.
 func findScript(scriptName string) (string, error) {
-	// 1. Check environment variable (e.g., SCRIPTNAME_PATH)
-	envVar := strings.ToUpper(strings.ReplaceAll(scriptName, ".", "_")) + "_PATH"
-	if scriptPath := os.Getenv(envVar); scriptPath != "" && fileExists(scriptPath) {
-		return scriptPath, nil
+	// 1. Check specific environment variable (e.g., SCRIPTNAME_PATH)
+	envVarSpecific := strings.ToUpper(strings.ReplaceAll(scriptName, ".", "_")) + "_PATH"
+	if scriptPath := os.Getenv(envVarSpecific); scriptPath != "" && fileExists(scriptPath) {
+		absPath, err := filepath.Abs(scriptPath)
+		if err == nil {
+			return absPath, nil
+		}
+		return scriptPath, nil // Return original path if abs fails
 	}
 
-	// 2. Try paths relative to the current working directory
+	// 2. Check directories specified in PYEXEC_SCRIPT_DIRS environment variable
+	envVarDirs := "PYEXEC_SCRIPT_DIRS"
+	if searchDirs := os.Getenv(envVarDirs); searchDirs != "" {
+		dirList := filepath.SplitList(searchDirs) // Handles OS-specific separator ( : or ; )
+		for _, dir := range dirList {
+			scriptPath := filepath.Join(dir, scriptName)
+			if fileExists(scriptPath) {
+				absPath, err := filepath.Abs(scriptPath)
+				if err == nil {
+					return absPath, nil
+				}
+				return scriptPath, nil // Return found path if abs fails
+			}
+		}
+	}
+
+	// 3. Try paths relative to the current working directory
 	possiblePaths := []string{
 		scriptName,
 		filepath.Join(".", scriptName),
@@ -37,7 +57,7 @@ func findScript(scriptName string) (string, error) {
 		// e.g., filepath.Join(".", "scripts", scriptName),
 	}
 
-	// 3. Try paths relative to the executable
+	// 4. Try paths relative to the executable
 	if execPath, err := os.Executable(); err == nil {
 		execDir := filepath.Dir(execPath)
 		possiblePaths = append(possiblePaths,
@@ -46,7 +66,7 @@ func findScript(scriptName string) (string, error) {
 		)
 	}
 
-	// 4. Try paths relative to the caller's source file (useful for tests)
+	// 5. Try paths relative to the caller's source file (useful for tests)
 	_, currentFile, _, ok := runtime.Caller(1) // Caller(1) to get the caller of findScript
 	if ok {
 		currentDir := filepath.Dir(currentFile)
@@ -57,7 +77,7 @@ func findScript(scriptName string) (string, error) {
 		)
 	}
 
-	// Check all possible paths
+	// Check all calculated possible paths (from steps 3, 4, 5)
 	for _, path := range possiblePaths {
 		cleanPath := filepath.Clean(path)
 		if fileExists(cleanPath) {
@@ -69,7 +89,7 @@ func findScript(scriptName string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("script '%s' not found in any of the expected locations (checked env %s, cwd, executable dir, caller dir)", scriptName, envVar)
+	return "", fmt.Errorf("script '%s' not found in any of the expected locations (checked env %s, env %s, cwd, executable dir, caller dir)", scriptName, envVarSpecific, envVarDirs)
 }
 
 // getPythonCommand returns the appropriate Python command (python3 or python).
