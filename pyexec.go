@@ -122,48 +122,44 @@ func getPythonCommand() string {
 }
 
 // ExecutePythonScript runs a specified Python script with given arguments.
+// Sets the script's working directory to its own directory.
 // Arguments are provided as a map, where keys are flags (e.g., "--model")
 // and values are the corresponding flag values. Flags without values can be
 // represented with an empty string value.
 // It returns the standard output of the script as bytes.
 func ExecutePythonScript(scriptName string, args map[string]string) ([]byte, error) {
-	// Find the script path
 	scriptPath, err := findScript(scriptName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find python script: %w", err)
 	}
 
-	// Get the Python command
 	pythonCmd := getPythonCommand()
 
-	// Prepare command arguments
-	cmdArgs := []string{scriptPath}
+	cmdArgs := []string{scriptPath} // Use the absolute path found
 	for key, value := range args {
 		cmdArgs = append(cmdArgs, key)
-		// Only append value if it's not empty (allows for boolean flags like --verbose)
 		if value != "" {
 			cmdArgs = append(cmdArgs, value)
 		}
 	}
 
-	// Create the command
 	cmd := exec.Command(pythonCmd, cmdArgs...)
+	// Set the working directory for the script to its own directory
+	cmd.Dir = filepath.Dir(scriptPath)
 
-	// Execute the command and capture stdout and stderr
-	stdout, err := cmd.Output() // cmd.Output() captures stdout and returns stderr in the error
+	stdout, err := cmd.Output()
 	if err != nil {
 		var stderr string
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			stderr = string(exitErr.Stderr)
 		}
 
-		errMsg := fmt.Sprintf("python script '%s' execution failed: %v", scriptName, err)
+		errMsg := fmt.Sprintf("python script '%s' (in dir %s) execution failed: %v", scriptName, cmd.Dir, err) // Added Dir to error
 		if stderr != "" {
-			errMsg += fmt.Sprintf("stderr: %s", stderr)
+			errMsg += fmt.Sprintf("\nstderr: %s", stderr) // Use newline for better formatting
 		}
-		// Include stdout in error message if available, as it might contain partial output or script-level errors
 		if len(stdout) > 0 {
-			errMsg += fmt.Sprintf("stdout: %s", string(stdout))
+			errMsg += fmt.Sprintf("\nstdout: %s", string(stdout)) // Use newline for better formatting
 		}
 		return nil, errors.New(errMsg)
 	}
@@ -172,7 +168,7 @@ func ExecutePythonScript(scriptName string, args map[string]string) ([]byte, err
 }
 
 // ExecutePythonScriptRealtime runs a Python script, prints its stdout and stderr in real-time,
-// and returns the complete stdout content.
+// sets the script's working directory to its own directory, and returns the complete stdout content.
 // It streams the output directly to the Go program's stdout and stderr.
 // Returns the captured stdout and an error if the script fails to start or exits with a non-zero status.
 func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]byte, error) {
@@ -183,7 +179,7 @@ func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]b
 
 	pythonCmd := getPythonCommand()
 
-	cmdArgs := []string{scriptPath}
+	cmdArgs := []string{scriptPath} // Use the absolute path found
 	for key, value := range args {
 		cmdArgs = append(cmdArgs, key)
 		if value != "" {
@@ -192,8 +188,9 @@ func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]b
 	}
 
 	cmd := exec.Command(pythonCmd, cmdArgs...)
+	// Set the working directory for the script to its own directory
+	cmd.Dir = filepath.Dir(scriptPath)
 
-	// Get pipes for stdout and stderr
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get stdout pipe: %w", err)
@@ -203,57 +200,46 @@ func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]b
 		return nil, fmt.Errorf("failed to get stderr pipe: %w", err)
 	}
 
-	// Buffer to capture stdout
 	var stdoutBuf bytes.Buffer
 
-	// Start the command asynchronously
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start python script '%s': %w", scriptName, err)
+		// Include the directory in the start error message
+		return nil, fmt.Errorf("failed to start python script '%s' in dir '%s': %w", scriptName, cmd.Dir, err)
 	}
 
-	// Use a WaitGroup to wait for pipe reading goroutines to finish
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// Goroutine to read, print, and capture stdout
 	go func() {
 		defer wg.Done()
-		// Combine writing to buffer and printing to os.Stdout
-		tee := io.TeeReader(stdoutPipe, &stdoutBuf) // Reads from stdoutPipe, writes to stdoutBuf
+		tee := io.TeeReader(stdoutPipe, &stdoutBuf)
 		scanner := bufio.NewScanner(tee)
 		for scanner.Scan() {
-			fmt.Fprintln(os.Stdout, "[stdout]", scanner.Text()) // Print in real-time
-			// Data is already written to stdoutBuf by io.TeeReader implicitly
+			fmt.Fprintln(os.Stdout, "[stdout]", scanner.Text())
 		}
 		if err := scanner.Err(); err != nil {
-			// Still print errors related to reading stdout
 			fmt.Fprintf(os.Stderr, "error reading stdout from %s: %v\n", scriptName, err)
 		}
 	}()
 
-	// Goroutine to read and print stderr (no capture needed)
 	go func() {
 		defer wg.Done()
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
-			fmt.Fprintln(os.Stderr, "[stderr]", scanner.Text()) // Prefix for clarity
+			fmt.Fprintln(os.Stderr, "[stderr]", scanner.Text())
 		}
 		if err := scanner.Err(); err != nil {
 			fmt.Fprintf(os.Stderr, "error reading stderr from %s: %v\n", scriptName, err)
 		}
 	}()
 
-	// Wait for the command to finish
-	cmdErr := cmd.Wait() // Capture the potential error from the command exit status
-
-	// Wait for the reading goroutines to finish *after* the command has exited
+	cmdErr := cmd.Wait()
 	wg.Wait()
 
 	if cmdErr != nil {
-		// Return captured stdout along with the error
-		return stdoutBuf.Bytes(), fmt.Errorf("python script '%s' exited with error: %w", scriptName, cmdErr)
+		// Include the directory in the exit error message
+		return stdoutBuf.Bytes(), fmt.Errorf("python script '%s' (in dir %s) exited with error: %w", scriptName, cmd.Dir, cmdErr)
 	}
 
-	// Return captured stdout and nil error on success
 	return stdoutBuf.Bytes(), nil
 }
