@@ -1,13 +1,17 @@
 package pyexec
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // fileExists checks if a file exists and is not a directory.
@@ -165,4 +169,91 @@ func ExecutePythonScript(scriptName string, args map[string]string) ([]byte, err
 	}
 
 	return stdout, nil
+}
+
+// ExecutePythonScriptRealtime runs a Python script, prints its stdout and stderr in real-time,
+// and returns the complete stdout content.
+// It streams the output directly to the Go program's stdout and stderr.
+// Returns the captured stdout and an error if the script fails to start or exits with a non-zero status.
+func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]byte, error) {
+	scriptPath, err := findScript(scriptName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find python script: %w", err)
+	}
+
+	pythonCmd := getPythonCommand()
+
+	cmdArgs := []string{scriptPath}
+	for key, value := range args {
+		cmdArgs = append(cmdArgs, key)
+		if value != "" {
+			cmdArgs = append(cmdArgs, value)
+		}
+	}
+
+	cmd := exec.Command(pythonCmd, cmdArgs...)
+
+	// Get pipes for stdout and stderr
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stdout pipe: %w", err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stderr pipe: %w", err)
+	}
+
+	// Buffer to capture stdout
+	var stdoutBuf bytes.Buffer
+
+	// Start the command asynchronously
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start python script '%s': %w", scriptName, err)
+	}
+
+	// Use a WaitGroup to wait for pipe reading goroutines to finish
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Goroutine to read, print, and capture stdout
+	go func() {
+		defer wg.Done()
+		// Combine writing to buffer and printing to os.Stdout
+		tee := io.TeeReader(stdoutPipe, &stdoutBuf) // Reads from stdoutPipe, writes to stdoutBuf
+		scanner := bufio.NewScanner(tee)
+		for scanner.Scan() {
+			fmt.Fprintln(os.Stdout, "[stdout]", scanner.Text()) // Print in real-time
+			// Data is already written to stdoutBuf by io.TeeReader implicitly
+		}
+		if err := scanner.Err(); err != nil {
+			// Still print errors related to reading stdout
+			fmt.Fprintf(os.Stderr, "error reading stdout from %s: %v\n", scriptName, err)
+		}
+	}()
+
+	// Goroutine to read and print stderr (no capture needed)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			fmt.Fprintln(os.Stderr, "[stderr]", scanner.Text()) // Prefix for clarity
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintf(os.Stderr, "error reading stderr from %s: %v\n", scriptName, err)
+		}
+	}()
+
+	// Wait for the command to finish
+	cmdErr := cmd.Wait() // Capture the potential error from the command exit status
+
+	// Wait for the reading goroutines to finish *after* the command has exited
+	wg.Wait()
+
+	if cmdErr != nil {
+		// Return captured stdout along with the error
+		return stdoutBuf.Bytes(), fmt.Errorf("python script '%s' exited with error: %w", scriptName, cmdErr)
+	}
+
+	// Return captured stdout and nil error on success
+	return stdoutBuf.Bytes(), nil
 }
