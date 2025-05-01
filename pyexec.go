@@ -122,7 +122,7 @@ func getPythonCommand() string {
 }
 
 // ExecutePythonScript runs a specified Python script with given arguments.
-// Sets the script's working directory to its own directory.
+// Sets the script's working directory to its own directory and runs Python in unbuffered mode.
 // Arguments are provided as a map, where keys are flags (e.g., "--model")
 // and values are the corresponding flag values. Flags without values can be
 // represented with an empty string value.
@@ -135,7 +135,8 @@ func ExecutePythonScript(scriptName string, args map[string]string) ([]byte, err
 
 	pythonCmd := getPythonCommand()
 
-	cmdArgs := []string{scriptPath} // Use the absolute path found
+	// Prepare command arguments, adding -u for unbuffered output
+	cmdArgs := []string{"-u", scriptPath} // <--- Added "-u"
 	for key, value := range args {
 		cmdArgs = append(cmdArgs, key)
 		if value != "" {
@@ -144,7 +145,6 @@ func ExecutePythonScript(scriptName string, args map[string]string) ([]byte, err
 	}
 
 	cmd := exec.Command(pythonCmd, cmdArgs...)
-	// Set the working directory for the script to its own directory
 	cmd.Dir = filepath.Dir(scriptPath)
 
 	stdout, err := cmd.Output()
@@ -154,12 +154,12 @@ func ExecutePythonScript(scriptName string, args map[string]string) ([]byte, err
 			stderr = string(exitErr.Stderr)
 		}
 
-		errMsg := fmt.Sprintf("python script '%s' (in dir %s) execution failed: %v", scriptName, cmd.Dir, err) // Added Dir to error
+		errMsg := fmt.Sprintf("python script '%s' (in dir %s) execution failed: %v", scriptName, cmd.Dir, err)
 		if stderr != "" {
-			errMsg += fmt.Sprintf("\nstderr: %s", stderr) // Use newline for better formatting
+			errMsg += fmt.Sprintf("\nstderr: %s", stderr)
 		}
 		if len(stdout) > 0 {
-			errMsg += fmt.Sprintf("\nstdout: %s", string(stdout)) // Use newline for better formatting
+			errMsg += fmt.Sprintf("\nstdout: %s", string(stdout))
 		}
 		return nil, errors.New(errMsg)
 	}
@@ -167,8 +167,9 @@ func ExecutePythonScript(scriptName string, args map[string]string) ([]byte, err
 	return stdout, nil
 }
 
-// ExecutePythonScriptRealtime runs a Python script, prints its stdout and stderr in real-time,
-// sets the script's working directory to its own directory, and returns the complete stdout content.
+// ExecutePythonScriptRealtime runs a Python script in unbuffered mode,
+// prints its stdout and stderr in real-time, sets the script's working directory
+// to its own directory, and returns the complete stdout content.
 // It streams the output directly to the Go program's stdout and stderr.
 // Returns the captured stdout and an error if the script fails to start or exits with a non-zero status.
 func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]byte, error) {
@@ -179,7 +180,8 @@ func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]b
 
 	pythonCmd := getPythonCommand()
 
-	cmdArgs := []string{scriptPath} // Use the absolute path found
+	// Prepare command arguments, adding -u for unbuffered output
+	cmdArgs := []string{"-u", scriptPath} // <--- Added "-u"
 	for key, value := range args {
 		cmdArgs = append(cmdArgs, key)
 		if value != "" {
@@ -188,7 +190,6 @@ func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]b
 	}
 
 	cmd := exec.Command(pythonCmd, cmdArgs...)
-	// Set the working directory for the script to its own directory
 	cmd.Dir = filepath.Dir(scriptPath)
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -203,7 +204,6 @@ func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]b
 	var stdoutBuf bytes.Buffer
 
 	if err := cmd.Start(); err != nil {
-		// Include the directory in the start error message
 		return nil, fmt.Errorf("failed to start python script '%s' in dir '%s': %w", scriptName, cmd.Dir, err)
 	}
 
@@ -215,7 +215,7 @@ func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]b
 		tee := io.TeeReader(stdoutPipe, &stdoutBuf)
 		scanner := bufio.NewScanner(tee)
 		for scanner.Scan() {
-			fmt.Fprintln(os.Stdout, "[stdout]", scanner.Text())
+			fmt.Fprintln(os.Stdout, "[stdout]", scanner.Text()) // Now should print in real-time
 		}
 		if err := scanner.Err(); err != nil {
 			fmt.Fprintf(os.Stderr, "error reading stdout from %s: %v\n", scriptName, err)
@@ -226,7 +226,7 @@ func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]b
 		defer wg.Done()
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
-			fmt.Fprintln(os.Stderr, "[stderr]", scanner.Text())
+			fmt.Fprintln(os.Stderr, "[stderr]", scanner.Text()) // Stderr is often unbuffered anyway
 		}
 		if err := scanner.Err(); err != nil {
 			fmt.Fprintf(os.Stderr, "error reading stderr from %s: %v\n", scriptName, err)
@@ -237,7 +237,6 @@ func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]b
 	wg.Wait()
 
 	if cmdErr != nil {
-		// Include the directory in the exit error message
 		return stdoutBuf.Bytes(), fmt.Errorf("python script '%s' (in dir %s) exited with error: %w", scriptName, cmd.Dir, cmdErr)
 	}
 
