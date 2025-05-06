@@ -4,18 +4,30 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
+	"github.com/rs/zerolog"
 	"zliu.org/goutil/rest"
 )
 
-var zlog = rest.Log()
+var (
+	zlog *zerolog.Logger
+	once sync.Once
+)
+
+func GetZlog() *zerolog.Logger {
+	once.Do(func() {
+		zlog = rest.Log()
+	})
+	return zlog
+}
 
 // HandlePythonExecutionRequest is an HTTP handler that executes a Python script.
 // It expects the script name as the last part of the URL path (e.g., /execute/script.py)
 // and arguments as query parameters.
 // Example: GET /execute/my_script.py?--input=data.csv&--threshold=0.5
 func HandlePythonExecutionRequest(w http.ResponseWriter, r *http.Request) {
-	zlog.Info().Str("addr", r.RemoteAddr).Str("method", r.Method).Str("host", r.Host).Str("uri", r.RequestURI).Msg("HandlePythonExecutionRequest")
+	GetZlog().Info().Str("addr", r.RemoteAddr).Str("method", r.Method).Str("host", r.Host).Str("uri", r.RequestURI).Msg("HandlePythonExecutionRequest")
 	// Extract script name from URL path
 	// Example: /execute/my_script.py -> my_script.py
 	pathParts := strings.Split(strings.TrimSuffix(r.URL.Path, "/"), "/")
