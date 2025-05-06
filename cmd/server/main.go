@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 )
 
 func main() {
+	flag.Parse()
 	// Register the handler from pyexec package
 	// It will handle requests like /execute/hello.py
 	http.HandleFunc("/execute/", pyexec.HandlePythonExecutionRequest) // Note the trailing slash
