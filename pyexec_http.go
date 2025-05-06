@@ -32,6 +32,7 @@ func HandlePythonExecutionRequest(w http.ResponseWriter, r *http.Request) {
 	// Example: /execute/my_script.py -> my_script.py
 	pathParts := strings.Split(strings.TrimSuffix(r.URL.Path, "/"), "/")
 	if len(pathParts) < 2 || pathParts[len(pathParts)-1] == "" {
+		zlog.Error().Str("url", r.URL.Path).Msg("Script name missing in URL path")
 		rest.ErrBadRequest(w, fmt.Sprintf("Script name missing in URL path. Expected format: /%s/<script_name.py>", r.URL.Path))
 		return
 	}
@@ -52,6 +53,7 @@ func HandlePythonExecutionRequest(w http.ResponseWriter, r *http.Request) {
 	// Execute the script
 	output, err := ExecutePythonScript(scriptName, args)
 	if err != nil {
+		zlog.Error().Str("url", r.URL.Path).Str("error", err.Error()).Msg("Failed to execute script")
 		rest.ErrInternalServer(w, fmt.Sprintf("Failed to execute script: %s", err.Error()))
 		return
 	}
