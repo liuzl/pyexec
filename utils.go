@@ -11,10 +11,6 @@ import (
 func EnsureUVInstalled() error {
 	_, err := exec.LookPath("uv")
 	if err == nil {
-		// uv is already installed
-		if zlog != nil {
-			zlog.Info().Msg("uv is already installed.")
-		}
 		return nil
 	}
 
