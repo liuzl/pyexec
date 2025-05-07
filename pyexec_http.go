@@ -3,6 +3,8 @@ package pyexec
 import (
 	"fmt"
 	"net/http"
+	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -22,12 +24,8 @@ func GetZlog() *zerolog.Logger {
 	return zlog
 }
 
-// HandlePythonExecutionRequest is an HTTP handler that executes a Python script.
-// It expects the script name as the last part of the URL path (e.g., /execute/script.py)
-// and arguments as query parameters.
-// Example: GET /execute/my_script.py?--input=data.csv&--threshold=0.5
-func HandlePythonExecutionRequest(w http.ResponseWriter, r *http.Request) {
-	GetZlog().Info().Str("addr", r.RemoteAddr).Str("method", r.Method).Str("host", r.Host).Str("uri", r.RequestURI).Msg("HandlePythonExecutionRequest")
+func handleExecutionRequest(w http.ResponseWriter, r *http.Request, f func(scriptName string, args map[string]string) ([]byte, error)) {
+	GetZlog().Info().Str("addr", r.RemoteAddr).Str("method", r.Method).Str("host", r.Host).Str("uri", r.RequestURI).Str("func", runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()).Msg("handleExecutionRequest")
 	// Extract script name from URL path
 	// Example: /execute/my_script.py -> my_script.py
 	pathParts := strings.Split(strings.TrimSuffix(r.URL.Path, "/"), "/")
@@ -51,7 +49,7 @@ func HandlePythonExecutionRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute the script
-	output, err := ExecutePythonScript(scriptName, args)
+	output, err := f(scriptName, args)
 	if err != nil {
 		zlog.Error().Str("url", r.URL.Path).Str("error", err.Error()).Msg("Failed to execute script")
 		rest.ErrInternalServer(w, fmt.Sprintf("Failed to execute script: %s", err.Error()))
@@ -59,4 +57,20 @@ func HandlePythonExecutionRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rest.MustWriteJSONBytes(w, output)
+}
+
+// HandlePythonExecutionRequest is an HTTP handler that executes a Python script.
+// It expects the script name as the last part of the URL path (e.g., /execute/script.py)
+// and arguments as query parameters.
+// Example: GET /execute/my_script.py?--input=data.csv&--threshold=0.5
+func HandlePythonExecutionRequest(w http.ResponseWriter, r *http.Request) {
+	handleExecutionRequest(w, r, ExecutePythonScript)
+}
+
+// HandlePythonExecutionRequestWithUV is an HTTP handler that executes a Python script using uv.
+// It expects the script name as the last part of the URL path (e.g., /execute/script.py)
+// and arguments as query parameters.
+// Example: GET /execute/my_script.py?--input=data.csv&--threshold=0.5
+func HandlePythonExecutionRequestWithUV(w http.ResponseWriter, r *http.Request) {
+	handleExecutionRequest(w, r, ExecutePythonScriptWithUV)
 }

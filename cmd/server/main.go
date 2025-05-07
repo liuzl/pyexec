@@ -13,7 +13,7 @@ func main() {
 	flag.Parse()
 	// Register the handler from pyexec package
 	// It will handle requests like /execute/hello.py
-	http.HandleFunc("/execute/", pyexec.HandlePythonExecutionRequest) // Note the trailing slash
+	http.HandleFunc("/execute/", pyexec.HandlePythonExecutionRequestWithUV) // Note the trailing slash
 
 	port := "8080"
 	fmt.Printf("Starting server on port %s...\n", port)
