@@ -3,6 +3,7 @@ package pyexec
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"reflect"
 	"runtime"
 	"strings"
@@ -36,17 +37,42 @@ func handleExecutionRequest(w http.ResponseWriter, r *http.Request, f func(scrip
 	}
 	scriptName := pathParts[len(pathParts)-1]
 
-	// Extract arguments from query parameters, preserving order
-	queryParams := r.URL.Query()
-	args := make([]Arg, 0, len(queryParams))
-	for key, values := range queryParams {
-		// Use the first value for each key. Handles cases like ?flag or ?key=value
-		if len(values) > 0 {
-			args = append(args, Arg{Key: key, Value: values[0]})
-		} else {
-			// Handle flags without values (e.g., ?verbose)
-			args = append(args, Arg{Key: key, Value: ""})
+	// Extract arguments from raw query parameters to preserve order
+	var args []Arg
+	if r.URL.RawQuery != "" {
+		rawParams := strings.Split(r.URL.RawQuery, "&")
+		args = make([]Arg, 0, len(rawParams))
+		for _, param := range rawParams {
+			if param == "" { // Skip empty parameters (e.g., from "&&" or trailing "&")
+				continue
+			}
+			var key, value string
+			parts := strings.SplitN(param, "=", 2)
+
+			decodedKey, err := url.QueryUnescape(parts[0])
+			if err != nil {
+				GetZlog().Warn().Str("raw_key", parts[0]).Err(err).Msg("Failed to unescape query parameter key")
+				rest.ErrBadRequest(w, fmt.Sprintf("Malformed query parameter key: %s", parts[0]))
+				return
+			}
+			key = decodedKey
+
+			if len(parts) == 2 {
+				decodedValue, err := url.QueryUnescape(parts[1])
+				if err != nil {
+					GetZlog().Warn().Str("raw_value", parts[1]).Err(err).Msg("Failed to unescape query parameter value")
+					rest.ErrBadRequest(w, fmt.Sprintf("Malformed query parameter value for key %s: %s", key, parts[1]))
+					return
+				}
+				value = decodedValue
+			} else {
+				value = "" // No value part, so it's a flag
+			}
+			args = append(args, Arg{Key: key, Value: value})
 		}
+	}
+	if args == nil { // Ensure args is an empty slice if RawQuery was empty
+		args = make([]Arg, 0)
 	}
 
 	// Execute the script
