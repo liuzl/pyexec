@@ -146,7 +146,7 @@ func ExecutePythonScript(scriptName string, args map[string]string) ([]byte, err
 
 	cmd := exec.Command(pythonCmd, cmdArgs...)
 	cmd.Dir = filepath.Dir(scriptPath)
-
+	GetZlog().Info().Str("cmd", cmd.String()).Msg("Executing command")
 	stdout, err := cmd.Output()
 	if err != nil {
 		var stderr string
@@ -191,7 +191,7 @@ func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]b
 
 	cmd := exec.Command(pythonCmd, cmdArgs...)
 	cmd.Dir = filepath.Dir(scriptPath)
-
+	GetZlog().Info().Str("cmd", cmd.String()).Msg("Executing command")
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get stdout pipe: %w", err)
