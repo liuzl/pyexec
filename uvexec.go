@@ -12,7 +12,7 @@ import (
 	"sync"
 )
 
-func ExecutePythonScriptWithUV(scriptName string, args map[string]string) ([]byte, error) {
+func ExecutePythonScriptWithUV(scriptName string, args []Arg) ([]byte, error) {
 	if err := EnsureUVInstalled(); err != nil {
 		return nil, fmt.Errorf("failed to ensure uv is installed: %w", err)
 	}
@@ -22,10 +22,10 @@ func ExecutePythonScriptWithUV(scriptName string, args map[string]string) ([]byt
 	}
 
 	cmdArgs := []string{"run", "--", "python", "-u", scriptPath} // <--- Added "-u"
-	for key, value := range args {
-		cmdArgs = append(cmdArgs, key)
-		if value != "" {
-			cmdArgs = append(cmdArgs, value)
+	for _, arg := range args {
+		cmdArgs = append(cmdArgs, arg.Key)
+		if arg.Value != "" {
+			cmdArgs = append(cmdArgs, arg.Value)
 		}
 	}
 
@@ -52,7 +52,7 @@ func ExecutePythonScriptWithUV(scriptName string, args map[string]string) ([]byt
 	return stdout, nil
 }
 
-func ExecutePythonScriptRealtimeWithUV(scriptName string, args map[string]string) ([]byte, error) {
+func ExecutePythonScriptRealtimeWithUV(scriptName string, args []Arg) ([]byte, error) {
 	if err := EnsureUVInstalled(); err != nil {
 		return nil, fmt.Errorf("failed to ensure uv is installed: %w", err)
 	}
@@ -62,10 +62,10 @@ func ExecutePythonScriptRealtimeWithUV(scriptName string, args map[string]string
 	}
 
 	cmdArgs := []string{"run", "--", "python", "-u", scriptPath} // <--- Added "-u"
-	for key, value := range args {
-		cmdArgs = append(cmdArgs, key)
-		if value != "" {
-			cmdArgs = append(cmdArgs, value)
+	for _, arg := range args {
+		cmdArgs = append(cmdArgs, arg.Key)
+		if arg.Value != "" {
+			cmdArgs = append(cmdArgs, arg.Value)
 		}
 	}
 

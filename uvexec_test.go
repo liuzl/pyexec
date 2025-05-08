@@ -9,23 +9,19 @@ import (
 
 func TestExecutePythonScriptWithUV(t *testing.T) {
 	scriptName := "test_script.py" // Assumes test_script.py is in the same directory
-	args := map[string]string{
-		"--arg1": "value1",
-		"--flag": "", // Test flag without value
-		"-a":     "value2",
+	args := []Arg{
+		{Key: "--arg1", Value: "value1"},
+		{Key: "--flag", Value: ""},
+		{Key: "-a", Value: "value2"},
 	}
 
 	// Expected arguments as they should appear in sys.argv[1:] in the Python script
-	// Note: Go map iteration order is not guaranteed, so we can't rely on exact order.
-	// Instead, we'll check if the output contains all expected arguments.
-	expectedArgsSet := map[string]bool{
-		"--arg1": true,
-		"value1": true,
-		"--flag": true,
-		"-a":     true,
-		"value2": true,
+	// Order now matters.
+	expectedArgsOrdered := []string{
+		"--arg1", "value1",
+		"--flag",
+		"-a", "value2",
 	}
-	expectedArgsCount := 5
 
 	t.Run("NormalExecution", func(t *testing.T) {
 		stdout, err := ExecutePythonScriptWithUV(scriptName, args)
@@ -42,18 +38,13 @@ func TestExecutePythonScriptWithUV(t *testing.T) {
 		}
 
 		// Check if the number of arguments matches
-		if len(receivedArgs) != expectedArgsCount {
-			t.Errorf("Expected %d arguments, but got %d. Received: %v", expectedArgsCount, len(receivedArgs), receivedArgs)
+		if len(receivedArgs) != len(expectedArgsOrdered) {
+			t.Errorf("Expected %d arguments, but got %d. Expected: %v, Received: %v", len(expectedArgsOrdered), len(receivedArgs), expectedArgsOrdered, receivedArgs)
 		}
 
-		// Check if all expected arguments are present
-		receivedArgsSet := make(map[string]bool)
-		for _, arg := range receivedArgs {
-			receivedArgsSet[arg] = true
-		}
-
-		if !reflect.DeepEqual(receivedArgsSet, expectedArgsSet) {
-			t.Errorf("Mismatch in received arguments.\nExpected presence: %v\nReceived: %v", expectedArgsSet, receivedArgsSet)
+		// Check if all expected arguments are present and in order
+		if !reflect.DeepEqual(receivedArgs, expectedArgsOrdered) {
+			t.Errorf("Mismatch in received arguments.\nExpected (ordered): %v\nReceived:           %v", expectedArgsOrdered, receivedArgs)
 		}
 	})
 

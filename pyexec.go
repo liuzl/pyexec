@@ -127,7 +127,7 @@ func getPythonCommand() string {
 // and values are the corresponding flag values. Flags without values can be
 // represented with an empty string value.
 // It returns the standard output of the script as bytes.
-func ExecutePythonScript(scriptName string, args map[string]string) ([]byte, error) {
+func ExecutePythonScript(scriptName string, args []Arg) ([]byte, error) {
 	scriptPath, err := findScript(scriptName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find python script: %w", err)
@@ -137,10 +137,10 @@ func ExecutePythonScript(scriptName string, args map[string]string) ([]byte, err
 
 	// Prepare command arguments, adding -u for unbuffered output
 	cmdArgs := []string{"-u", scriptPath} // <--- Added "-u"
-	for key, value := range args {
-		cmdArgs = append(cmdArgs, key)
-		if value != "" {
-			cmdArgs = append(cmdArgs, value)
+	for _, arg := range args {
+		cmdArgs = append(cmdArgs, arg.Key)
+		if arg.Value != "" {
+			cmdArgs = append(cmdArgs, arg.Value)
 		}
 	}
 
@@ -172,7 +172,7 @@ func ExecutePythonScript(scriptName string, args map[string]string) ([]byte, err
 // to its own directory, and returns the complete stdout content.
 // It streams the output directly to the Go program's stdout and stderr.
 // Returns the captured stdout and an error if the script fails to start or exits with a non-zero status.
-func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]byte, error) {
+func ExecutePythonScriptRealtime(scriptName string, args []Arg) ([]byte, error) {
 	scriptPath, err := findScript(scriptName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find python script: %w", err)
@@ -182,10 +182,10 @@ func ExecutePythonScriptRealtime(scriptName string, args map[string]string) ([]b
 
 	// Prepare command arguments, adding -u for unbuffered output
 	cmdArgs := []string{"-u", scriptPath} // <--- Added "-u"
-	for key, value := range args {
-		cmdArgs = append(cmdArgs, key)
-		if value != "" {
-			cmdArgs = append(cmdArgs, value)
+	for _, arg := range args {
+		cmdArgs = append(cmdArgs, arg.Key)
+		if arg.Value != "" {
+			cmdArgs = append(cmdArgs, arg.Value)
 		}
 	}
 
