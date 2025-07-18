@@ -31,7 +31,7 @@ func handleExecutionRequest(w http.ResponseWriter, r *http.Request, f func(scrip
 	start := time.Now()
 	defer func() {
 		duration := time.Since(start)
-		GetZlog().Info().Dur("duration", duration).Str("func", runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()).Msg("handleExecutionRequest completed")
+		GetZlog().Info().Dur("duration", duration).Str("uri", r.RequestURI).Msg("handleExecutionRequest completed")
 	}()
 	// Extract script name from URL path
 	// Example: /execute/my_script.py -> my_script.py
