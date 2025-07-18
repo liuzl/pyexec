@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 	"zliu.org/goutil/rest"
@@ -27,6 +28,11 @@ func GetZlog() *zerolog.Logger {
 
 func handleExecutionRequest(w http.ResponseWriter, r *http.Request, f func(scriptName string, args []Arg) ([]byte, error)) {
 	GetZlog().Info().Str("addr", r.RemoteAddr).Str("method", r.Method).Str("host", r.Host).Str("uri", r.RequestURI).Str("func", runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()).Msg("handleExecutionRequest")
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start)
+		GetZlog().Info().Dur("duration", duration).Str("func", runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()).Msg("handleExecutionRequest completed")
+	}()
 	// Extract script name from URL path
 	// Example: /execute/my_script.py -> my_script.py
 	pathParts := strings.Split(strings.TrimSuffix(r.URL.Path, "/"), "/")
