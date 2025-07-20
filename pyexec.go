@@ -16,8 +16,10 @@ import (
 
 // fileExists checks if a file exists and is not a directory.
 func fileExists(filename string) bool {
+	GetZlog().Info().Str("filename", filename).Msg("Checking if file exists")
 	info, err := os.Stat(filename)
-	if os.IsNotExist(err) {
+	if err != nil {
+		GetZlog().Error().Str("filename", filename).Err(err).Msg("Error checking if file exists")
 		return false
 	}
 	return !info.IsDir()
